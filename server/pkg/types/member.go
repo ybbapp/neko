@@ -45,6 +45,7 @@ type MemberManager interface {
 	MemberProvider
 
 	Login(username string, password string) (Session, string, error)
-	LoginOAuth(subject, name, avatar string) (Session, string, error)
+	LoginOAuth(subject, name, avatar, email string, isAdmin bool, extraData map[string]any) (Session, string, error)
+	OAuthExtraData(id string) map[string]any
 	Logout(id string) error
 }

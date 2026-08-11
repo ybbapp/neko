@@ -177,22 +177,24 @@ environment:
 
 ### OAuth 2.0 Provider {#member.oauth}
 
-Neko can use a generic OAuth 2.0 authorization-code provider. It exchanges the authorization code server-side, fetches the configured user-info endpoint, and only stores the external subject, display name, and avatar in the Neko session. Provider access tokens are never persisted or returned to the browser.
+Neko can use an OAuth 2.0 authorization-code provider. It exchanges the authorization code server-side and fetches the configured user-info endpoint. Provider access tokens, refresh tokens, and raw ID tokens are never persisted or returned to the browser.
 
-Set `member.oauth.redirect_url` to the exact callback URL registered with the provider, normally `https://<neko-host>/api/oauth/callback` (include `server.path_prefix` when one is configured). The user-info endpoint must return JSON. Its identifier, display name, and avatar field names are configurable for providers such as GitHub, GitLab, Authentik, Keycloak, or an OIDC provider. `success_redirect` is relative to `server.path_prefix`.
+For OpenID Connect providers, set `issuer_url`. Neko retrieves `/.well-known/openid-configuration` from that issuer and uses its authorization, token, and user-info endpoints. Issuer discovery takes precedence over explicitly configured endpoints, so it can be introduced without removing older endpoint settings.
+
+When `redirect_url` is omitted, Neko derives the callback URL from the browser request as `https://<neko-host>/api/oauth/callback` (including `server.path_prefix`). Register that exact URL with the provider. Behind a TLS-terminating reverse proxy, set `server.proxy: true` so Neko trusts `X-Forwarded-Proto` and `X-Forwarded-Host`. The user-info endpoint must return JSON. `success_redirect` is relative to `server.path_prefix`.
 
 ```yaml title="config.yaml"
 member:
+  provider: "oauth"
   oauth:
     enabled: true
     # When true, visiting the Neko root page immediately starts OAuth login.
     auto_redirect: true
+    name: "Example SSO"
+    admin_email: "platform-admin@example.com,security@example.com"
     client_id: "<client-id>"
     client_secret: "<client-secret>"
-    authorization_url: "https://id.example.com/oauth/authorize"
-    token_url: "https://id.example.com/oauth/token"
-    userinfo_url: "https://id.example.com/oauth/userinfo"
-    redirect_url: "https://neko.example.com/api/oauth/callback"
+    issuer_url: "https://id.example.com"
     scopes: ["openid", "profile"]
     # Configure these to match the JSON returned by userinfo_url.
     subject_field: "sub"
@@ -211,7 +213,13 @@ member:
       can_see_inactive_cursors: false
 ```
 
-The sign-in endpoint is `GET /api/oauth/login`; the callback endpoint is `GET /api/oauth/callback`. OAuth login requires `session.cookie.enabled: true`, which is the default. For GitHub, for example, use `read:user` as a scope and set `subject_field: id`, `username_field: login`, and `avatar_field: avatar_url`.
+The sign-in endpoint is `GET /api/oauth/login`; the callback endpoint is `GET /api/oauth/callback`. OAuth login requires `session.cookie.enabled: true`, which is the default. Set `member.provider: oauth` to make OAuth the only member provider.
+
+`admin_email` is a comma-separated list matched against the standard `email` field, case-insensitively. An OAuth user is an administrator when either their email matches that list or their user-info/ID-token claims include `isAdmin: true`. The configured name and avatar fields are read from userinfo first, then fall back to the ID token when userinfo omits them. Avatar URLs are rendered by clients that support member avatars.
+
+For OAuth sessions, `GET /api/whoami` includes `extra_data`: the merged userinfo and ID-token claims, with userinfo values taking precedence. It is returned only to the authenticated session owner and is intended for profile-field troubleshooting. Do not place secrets in provider profile claims.
+
+For non-OIDC providers, set `authorization_url`, `token_url`, `userinfo_url`, and optionally `redirect_url` directly. For GitHub, for example, use `read:user` as a scope and set `subject_field: id`, `username_field: login`, and `avatar_field: avatar_url`.
 
 ### File Provider {#member.file}
 

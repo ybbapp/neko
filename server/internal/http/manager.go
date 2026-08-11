@@ -68,8 +68,32 @@ func New(WebSocketManager types.WebSocketManager, ApiManager types.ApiManager, c
 	}
 	router.Post("/api/batch", batch.Handle)
 
-	if memberConfig.OAuth.Enabled && memberConfig.OAuth.AutoRedirect {
+	var staticHandler types.RouterHandler
+	if config.Static != "" {
+		fs := http.FileServer(http.Dir(config.Static))
+		staticHandler = func(w http.ResponseWriter, r *http.Request) error {
+			_, err := os.Stat(config.Static + r.URL.Path)
+			if err == nil {
+				fs.ServeHTTP(w, r)
+				return nil
+			}
+			if os.IsNotExist(err) {
+				http.NotFound(w, r)
+				return nil
+			}
+			return err
+		}
+	}
+
+	if memberConfig.Provider == "oauth" && memberConfig.OAuth.Enabled && memberConfig.OAuth.AutoRedirect {
 		router.Get("/", func(w http.ResponseWriter, r *http.Request) error {
+			if ApiManager.IsAuthenticated(r) {
+				if staticHandler != nil {
+					return staticHandler(w, r)
+				}
+				http.NotFound(w, r)
+				return nil
+			}
 			http.Redirect(w, r, path.Join(config.PathPrefix, "/api/oauth/login"), http.StatusFound)
 			return nil
 		})
@@ -87,20 +111,8 @@ func New(WebSocketManager types.WebSocketManager, ApiManager types.ApiManager, c
 		})
 	}
 
-	if config.Static != "" {
-		fs := http.FileServer(http.Dir(config.Static))
-		router.Get("/*", func(w http.ResponseWriter, r *http.Request) error {
-			_, err := os.Stat(config.Static + r.URL.Path)
-			if err == nil {
-				fs.ServeHTTP(w, r)
-				return nil
-			}
-			if os.IsNotExist(err) {
-				http.NotFound(w, r)
-				return nil
-			}
-			return err
-		})
+	if staticHandler != nil {
+		router.Get("/*", staticHandler)
 	}
 
 	if config.PProf {

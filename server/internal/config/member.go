@@ -1,6 +1,8 @@
 package config
 
 import (
+	"strings"
+
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -27,8 +29,11 @@ type Member struct {
 type OAuth struct {
 	Enabled          bool
 	AutoRedirect     bool
+	Name             string
+	AdminEmails      []string
 	ClientID         string
 	ClientSecret     string
+	IssuerURL        string
 	AuthorizationURL string
 	TokenURL         string
 	UserInfoURL      string
@@ -96,6 +101,16 @@ func (Member) Init(cmd *cobra.Command) error {
 		return err
 	}
 
+	cmd.PersistentFlags().String("member.oauth.name", "OAuth", "display name for the OAuth login option")
+	if err := viper.BindPFlag("member.oauth.name", cmd.PersistentFlags().Lookup("member.oauth.name")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.admin_email", "", "comma-separated OAuth user-info email addresses granted administrator access")
+	if err := viper.BindPFlag("member.oauth.admin_email", cmd.PersistentFlags().Lookup("member.oauth.admin_email")); err != nil {
+		return err
+	}
+
 	cmd.PersistentFlags().String("member.oauth.client_id", "", "OAuth 2.0 client ID")
 	if err := viper.BindPFlag("member.oauth.client_id", cmd.PersistentFlags().Lookup("member.oauth.client_id")); err != nil {
 		return err
@@ -103,6 +118,11 @@ func (Member) Init(cmd *cobra.Command) error {
 
 	cmd.PersistentFlags().String("member.oauth.client_secret", "", "OAuth 2.0 client secret")
 	if err := viper.BindPFlag("member.oauth.client_secret", cmd.PersistentFlags().Lookup("member.oauth.client_secret")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.issuer_url", "", "OpenID Connect issuer URL used to discover OAuth endpoints")
+	if err := viper.BindPFlag("member.oauth.issuer_url", cmd.PersistentFlags().Lookup("member.oauth.issuer_url")); err != nil {
 		return err
 	}
 
@@ -194,8 +214,11 @@ func (s *Member) Set() {
 	// OAuth provider
 	s.OAuth.Enabled = viper.GetBool("member.oauth.enabled")
 	s.OAuth.AutoRedirect = viper.GetBool("member.oauth.auto_redirect")
+	s.OAuth.Name = viper.GetString("member.oauth.name")
+	s.OAuth.AdminEmails = commaSeparatedValues(viper.GetString("member.oauth.admin_email"))
 	s.OAuth.ClientID = viper.GetString("member.oauth.client_id")
 	s.OAuth.ClientSecret = viper.GetString("member.oauth.client_secret")
+	s.OAuth.IssuerURL = viper.GetString("member.oauth.issuer_url")
 	s.OAuth.AuthorizationURL = viper.GetString("member.oauth.authorization_url")
 	s.OAuth.TokenURL = viper.GetString("member.oauth.token_url")
 	s.OAuth.UserInfoURL = viper.GetString("member.oauth.userinfo_url")
@@ -251,6 +274,17 @@ func (s *Member) Set() {
 	)); err != nil {
 		log.Warn().Err(err).Msgf("unable to parse member multiuser admin profile")
 	}
+}
+
+func commaSeparatedValues(value string) []string {
+	values := strings.Split(value, ",")
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func (s *Member) SetV2() {
