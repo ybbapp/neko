@@ -25,6 +25,7 @@ A member profile is a structure that describes the user and what the user is all
 | Field                      | Description | Type |
 |----------------------------|-------------|------|
 | <Def id="profile.name" />                     | User's name as shown in the UI, must not be unique within the system (not used as an identifier). | string |
+| `avatar`                   | Avatar URL shown in clients that support member avatars. OAuth logins synchronize this value from the configured user-info field. | string |
 | <Def id="profile.is_admin" />                 | Whether the user can perform administrative tasks that include managing users, sessions, and settings. | boolean |
 | <Def id="profile.can_login" />                | Whether the user can log in to the system and use the HTTP API. | boolean |
 | <Def id="profile.can_connect" />              | Whether the user can connect to the room using the WebSocket API (needs <Opt id="profile.can_login" /> to be enabled). | boolean |
@@ -44,6 +45,7 @@ import TabItem from '@theme/TabItem';
   
     ```yaml title="Example member profile in YAML"
     name: User Name
+    avatar: https://example.com/avatar.png
     is_admin: false
     can_login: true
     can_connect: true
@@ -63,6 +65,7 @@ import TabItem from '@theme/TabItem';
     ```json title="Example member profile in JSON"
     {
       "name": "User Name",
+      "avatar": "https://example.com/avatar.png",
       "is_admin": false,
       "can_login": true, 
       "can_connect": true, 
@@ -171,6 +174,44 @@ environment:
   NEKO_MEMBER_MULTIUSER_USER_PASSWORD: "neko"
 ```
 :::
+
+### OAuth 2.0 Provider {#member.oauth}
+
+Neko can use a generic OAuth 2.0 authorization-code provider. It exchanges the authorization code server-side, fetches the configured user-info endpoint, and only stores the external subject, display name, and avatar in the Neko session. Provider access tokens are never persisted or returned to the browser.
+
+Set `member.oauth.redirect_url` to the exact callback URL registered with the provider, normally `https://<neko-host>/api/oauth/callback` (include `server.path_prefix` when one is configured). The user-info endpoint must return JSON. Its identifier, display name, and avatar field names are configurable for providers such as GitHub, GitLab, Authentik, Keycloak, or an OIDC provider. `success_redirect` is relative to `server.path_prefix`.
+
+```yaml title="config.yaml"
+member:
+  oauth:
+    enabled: true
+    # When true, visiting the Neko root page immediately starts OAuth login.
+    auto_redirect: true
+    client_id: "<client-id>"
+    client_secret: "<client-secret>"
+    authorization_url: "https://id.example.com/oauth/authorize"
+    token_url: "https://id.example.com/oauth/token"
+    userinfo_url: "https://id.example.com/oauth/userinfo"
+    redirect_url: "https://neko.example.com/api/oauth/callback"
+    scopes: ["openid", "profile"]
+    # Configure these to match the JSON returned by userinfo_url.
+    subject_field: "sub"
+    username_field: "name"
+    avatar_field: "picture"
+    success_redirect: "/"
+    user_profile:
+      is_admin: false
+      can_login: true
+      can_connect: true
+      can_watch: true
+      can_host: true
+      can_share_media: true
+      can_access_clipboard: true
+      sends_inactive_cursor: true
+      can_see_inactive_cursors: false
+```
+
+The sign-in endpoint is `GET /api/oauth/login`; the callback endpoint is `GET /api/oauth/callback`. OAuth login requires `session.cookie.enabled: true`, which is the default. For GitHub, for example, use `read:user` as a scope and set `subject_field: id`, `username_field: login`, and `avatar_field: avatar_url`.
 
 ### File Provider {#member.file}
 

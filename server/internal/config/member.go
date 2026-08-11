@@ -19,6 +19,26 @@ type Member struct {
 	File      file.Config
 	Object    object.Config
 	Multiuser multiuser.Config
+	OAuth     OAuth
+}
+
+// OAuth contains the generic OAuth 2.0 authorization-code flow settings.
+// The provider's user-info response is mapped to a Neko member profile.
+type OAuth struct {
+	Enabled          bool
+	AutoRedirect     bool
+	ClientID         string
+	ClientSecret     string
+	AuthorizationURL string
+	TokenURL         string
+	UserInfoURL      string
+	RedirectURL      string
+	Scopes           []string
+	SubjectField     string
+	UsernameField    string
+	AvatarField      string
+	SuccessRedirect  string
+	UserProfile      types.MemberProfile
 }
 
 func (Member) Init(cmd *cobra.Command) error {
@@ -65,6 +85,77 @@ func (Member) Init(cmd *cobra.Command) error {
 		return err
 	}
 
+	// OAuth 2.0 provider
+	cmd.PersistentFlags().Bool("member.oauth.enabled", false, "enable OAuth 2.0 login")
+	if err := viper.BindPFlag("member.oauth.enabled", cmd.PersistentFlags().Lookup("member.oauth.enabled")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().Bool("member.oauth.auto_redirect", false, "redirect the Neko root page to OAuth login automatically")
+	if err := viper.BindPFlag("member.oauth.auto_redirect", cmd.PersistentFlags().Lookup("member.oauth.auto_redirect")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.client_id", "", "OAuth 2.0 client ID")
+	if err := viper.BindPFlag("member.oauth.client_id", cmd.PersistentFlags().Lookup("member.oauth.client_id")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.client_secret", "", "OAuth 2.0 client secret")
+	if err := viper.BindPFlag("member.oauth.client_secret", cmd.PersistentFlags().Lookup("member.oauth.client_secret")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.authorization_url", "", "OAuth 2.0 authorization endpoint")
+	if err := viper.BindPFlag("member.oauth.authorization_url", cmd.PersistentFlags().Lookup("member.oauth.authorization_url")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.token_url", "", "OAuth 2.0 token endpoint")
+	if err := viper.BindPFlag("member.oauth.token_url", cmd.PersistentFlags().Lookup("member.oauth.token_url")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.userinfo_url", "", "OAuth 2.0 user-info endpoint")
+	if err := viper.BindPFlag("member.oauth.userinfo_url", cmd.PersistentFlags().Lookup("member.oauth.userinfo_url")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.redirect_url", "", "OAuth 2.0 callback URL registered with the provider")
+	if err := viper.BindPFlag("member.oauth.redirect_url", cmd.PersistentFlags().Lookup("member.oauth.redirect_url")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().StringSlice("member.oauth.scopes", []string{"openid", "profile"}, "OAuth 2.0 scopes")
+	if err := viper.BindPFlag("member.oauth.scopes", cmd.PersistentFlags().Lookup("member.oauth.scopes")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.subject_field", "sub", "field in user-info response used as the stable user identifier")
+	if err := viper.BindPFlag("member.oauth.subject_field", cmd.PersistentFlags().Lookup("member.oauth.subject_field")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.username_field", "name", "field in user-info response used as the display name")
+	if err := viper.BindPFlag("member.oauth.username_field", cmd.PersistentFlags().Lookup("member.oauth.username_field")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.avatar_field", "picture", "field in user-info response used as the avatar URL")
+	if err := viper.BindPFlag("member.oauth.avatar_field", cmd.PersistentFlags().Lookup("member.oauth.avatar_field")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.success_redirect", "/", "relative URL to redirect to after OAuth login")
+	if err := viper.BindPFlag("member.oauth.success_redirect", cmd.PersistentFlags().Lookup("member.oauth.success_redirect")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("member.oauth.user_profile", "{}", "OAuth user permission profile")
+	if err := viper.BindPFlag("member.oauth.user_profile", cmd.PersistentFlags().Lookup("member.oauth.user_profile")); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -100,6 +191,21 @@ func (s *Member) Set() {
 	s.Multiuser.UserPassword = viper.GetString("member.multiuser.user_password")
 	s.Multiuser.AdminPassword = viper.GetString("member.multiuser.admin_password")
 
+	// OAuth provider
+	s.OAuth.Enabled = viper.GetBool("member.oauth.enabled")
+	s.OAuth.AutoRedirect = viper.GetBool("member.oauth.auto_redirect")
+	s.OAuth.ClientID = viper.GetString("member.oauth.client_id")
+	s.OAuth.ClientSecret = viper.GetString("member.oauth.client_secret")
+	s.OAuth.AuthorizationURL = viper.GetString("member.oauth.authorization_url")
+	s.OAuth.TokenURL = viper.GetString("member.oauth.token_url")
+	s.OAuth.UserInfoURL = viper.GetString("member.oauth.userinfo_url")
+	s.OAuth.RedirectURL = viper.GetString("member.oauth.redirect_url")
+	s.OAuth.Scopes = viper.GetStringSlice("member.oauth.scopes")
+	s.OAuth.SubjectField = viper.GetString("member.oauth.subject_field")
+	s.OAuth.UsernameField = viper.GetString("member.oauth.username_field")
+	s.OAuth.AvatarField = viper.GetString("member.oauth.avatar_field")
+	s.OAuth.SuccessRedirect = viper.GetString("member.oauth.success_redirect")
+
 	// default user profile
 	s.Multiuser.UserProfile = types.MemberProfile{
 		IsAdmin:               false,
@@ -112,12 +218,18 @@ func (s *Member) Set() {
 		SendsInactiveCursor:   true,
 		CanSeeInactiveCursors: false,
 	}
+	s.OAuth.UserProfile = s.Multiuser.UserProfile
 
 	// override user profile
 	if err := viper.UnmarshalKey("member.multiuser.user_profile", &s.Multiuser.UserProfile, viper.DecodeHook(
 		utils.JsonStringAutoDecode(s.Multiuser.UserProfile),
 	)); err != nil {
 		log.Warn().Err(err).Msgf("unable to parse member multiuser user profile")
+	}
+	if err := viper.UnmarshalKey("member.oauth.user_profile", &s.OAuth.UserProfile, viper.DecodeHook(
+		utils.JsonStringAutoDecode(s.OAuth.UserProfile),
+	)); err != nil {
+		log.Warn().Err(err).Msgf("unable to parse member OAuth user profile")
 	}
 
 	// default admin profile

@@ -8,6 +8,7 @@ import (
 	"github.com/m1k1o/neko/server/internal/api/members"
 	"github.com/m1k1o/neko/server/internal/api/room"
 	"github.com/m1k1o/neko/server/internal/api/sessions"
+	"github.com/m1k1o/neko/server/internal/config"
 	"github.com/m1k1o/neko/server/pkg/auth"
 	"github.com/m1k1o/neko/server/pkg/types"
 	"github.com/m1k1o/neko/server/pkg/utils"
@@ -19,6 +20,7 @@ type ApiManagerCtx struct {
 	desktop  types.DesktopManager
 	capture  types.CaptureManager
 	routers  map[string]func(types.Router)
+	oauth    *oauthHandler
 }
 
 func New(
@@ -26,7 +28,13 @@ func New(
 	members types.MemberManager,
 	desktop types.DesktopManager,
 	capture types.CaptureManager,
+	memberConfig *config.Member,
+	serverConfig *config.Server,
 ) *ApiManagerCtx {
+	pathPrefix := "/"
+	if serverConfig != nil {
+		pathPrefix = serverConfig.PathPrefix
+	}
 
 	return &ApiManagerCtx{
 		sessions: sessions,
@@ -34,11 +42,14 @@ func New(
 		desktop:  desktop,
 		capture:  capture,
 		routers:  make(map[string]func(types.Router)),
+		oauth:    newOAuthHandler(memberConfig.OAuth, pathPrefix),
 	}
 }
 
 func (api *ApiManagerCtx) Route(r types.Router) {
 	r.Post("/login", api.Login)
+	r.Get("/oauth/login", api.OAuthLogin)
+	r.Get("/oauth/callback", api.OAuthCallback)
 
 	// Authenticated area
 	r.Group(func(r types.Router) {

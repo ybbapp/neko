@@ -160,6 +160,40 @@ func (manager *MemberManagerCtx) Login(username string, password string) (types.
 	return manager.sessions.Create(id, profile)
 }
 
+// LoginOAuth creates a stable session identity from an OAuth provider subject.
+// The profile data is refreshed on every successful OAuth login.
+func (manager *MemberManagerCtx) LoginOAuth(subject, name, avatar string) (types.Session, string, error) {
+	manager.loginMu.Lock()
+	defer manager.loginMu.Unlock()
+
+	if subject == "" {
+		return nil, "", errors.New("OAuth subject is empty")
+	}
+
+	profile := manager.config.OAuth.UserProfile
+	if name != "" {
+		profile.Name = name
+	}
+	profile.Avatar = avatar
+
+	if !profile.IsAdmin && manager.sessions.Settings().LockedLogins {
+		return nil, "", types.ErrSessionLoginsLocked
+	}
+
+	id := "oauth:" + subject
+	if session, ok := manager.sessions.Get(id); ok {
+		if session.State().IsConnected {
+			return nil, "", types.ErrSessionAlreadyConnected
+		}
+
+		if err := manager.sessions.Delete(id); err != nil {
+			return nil, "", err
+		}
+	}
+
+	return manager.sessions.Create(id, profile)
+}
+
 func (manager *MemberManagerCtx) Logout(id string) error {
 	manager.loginMu.Lock()
 	defer manager.loginMu.Unlock()
