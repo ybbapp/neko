@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
@@ -23,7 +24,7 @@ type HttpManagerCtx struct {
 	http   *http.Server
 }
 
-func New(WebSocketManager types.WebSocketManager, ApiManager types.ApiManager, config *config.Server) *HttpManagerCtx {
+func New(WebSocketManager types.WebSocketManager, ApiManager types.ApiManager, config *config.Server, memberConfig *config.Member) *HttpManagerCtx {
 	logger := log.With().Str("module", "http").Logger()
 
 	opts := []RouterOption{
@@ -66,6 +67,13 @@ func New(WebSocketManager types.WebSocketManager, ApiManager types.ApiManager, c
 		},
 	}
 	router.Post("/api/batch", batch.Handle)
+
+	if memberConfig.OAuth.Enabled && memberConfig.OAuth.AutoRedirect {
+		router.Get("/", func(w http.ResponseWriter, r *http.Request) error {
+			http.Redirect(w, r, path.Join(config.PathPrefix, "/api/oauth/login"), http.StatusFound)
+			return nil
+		})
+	}
 
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) error {
 		_, err := w.Write([]byte("true"))
