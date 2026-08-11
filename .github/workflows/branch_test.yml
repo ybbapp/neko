@@ -77,7 +77,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_ACCESS_TOKEN }}
+          password: ${{ secrets.GHCR_ACCESS_TOKEN || github.token }}
 
       - name: Generate base Dockerfile
         run: go run utils/docker/main.go -i Dockerfile.tmpl -o Dockerfile -client client/dist
@@ -113,7 +113,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_ACCESS_TOKEN }}
+          password: ${{ secrets.GHCR_ACCESS_TOKEN || github.token }}
 
       - name: Build and push app image
         uses: docker/build-push-action@v6
